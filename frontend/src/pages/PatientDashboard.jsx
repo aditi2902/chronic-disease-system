@@ -74,7 +74,15 @@ export default function PatientDashboard() {
       setForm({ ...form, glucose_mg_dl: '', weight_kg: '', sleep_hrs: '', exercise_min: '', medication_taken: false });
       fetchData();
     } catch (err) {
-      const detail = err.response?.data?.detail || 'Submission failed. Please try again.';
+      let detail = err.response?.data?.detail || 'Submission failed. Please try again.';
+      if (typeof detail !== 'string') {
+        if (Array.isArray(detail)) {
+          // Format validation errors list (e.g. loc: msg)
+          detail = detail.map(d => `${d.loc?.[1] || 'input'}: ${d.msg}`).join(', ');
+        } else {
+          detail = JSON.stringify(detail);
+        }
+      }
       setSubmitResult({ type: 'error', message: detail });
     } finally {
       setSubmitLoading(false);
@@ -88,6 +96,93 @@ export default function PatientDashboard() {
     : { label: 'NORMAL', color: '#10b981' }
     : null;
 
+  // Calculate the current active alert level for the patient
+  const activeAlerts = alerts.filter(a => !a.resolved);
+  let alertLevel = { label: 'NORMAL', color: '#10b981', sub: 'System stable' };
+  if (activeAlerts.some(a => a.severity === 'CRITICAL')) {
+    alertLevel = { label: 'CRITICAL', color: '#ef4444', sub: 'Urgent action required' };
+  } else if (activeAlerts.some(a => a.severity === 'HIGH')) {
+    alertLevel = { label: 'HIGH', color: '#f59e0b', sub: 'Elevated readings' };
+  } else if (activeAlerts.some(a => a.severity === 'TREND_ALERT')) {
+    alertLevel = { label: 'MEDIUM', color: '#a78bfa', sub: 'Worsening trend detected' };
+  }
+
+  const generatePersonalizedRecommendations = () => {
+    const recs = [];
+    
+    // 1. Medication Adherence
+    const medicationReadings = readings.filter(r => r.medication_taken === false);
+    const missedCount = medicationReadings.length;
+    if (missedCount > 0) {
+      recs.push({
+        icon: '💊',
+        color: '#f59e0b',
+        title: 'Improve Medication Adherence',
+        desc: `You missed your medication ${missedCount} time${missedCount > 1 ? 's' : ''} in the last 7 days. Consistency is key to preventing trend escalation.`
+      });
+    } else {
+      recs.push({
+        icon: '💊',
+        color: '#10b981',
+        title: 'Maintain Medication Schedule',
+        desc: 'Great job! You have logged 100% adherence to your medication this week. Keep taking it exactly as prescribed.'
+      });
+    }
+
+    // 2. Exercise
+    const validExerciseReadings = readings.filter(r => r.exercise_min !== null);
+    const avgExercise = validExerciseReadings.length > 0 
+      ? validExerciseReadings.reduce((sum, r) => sum + r.exercise_min, 0) / validExerciseReadings.length 
+      : 0;
+    if (avgExercise < 30) {
+      recs.push({
+        icon: '🏃‍♂️',
+        color: '#a78bfa',
+        title: 'Increase Daily Exercise',
+        desc: `Your exercise averaged ${avgExercise.toFixed(0)} mins/day. Elevating this to 30+ minutes (e.g., a brisk walk after dinner) is highly effective at clearing glucose from your blood.`
+      });
+    } else {
+      recs.push({
+        icon: '🏃‍♂️',
+        color: '#10b981',
+        title: 'Keep Up the Exercise',
+        desc: `Awesome job exercising! You averaged ${avgExercise.toFixed(0)} minutes of physical activity daily this week. This helps maintain insulin sensitivity.`
+      });
+    }
+
+    // 3. Sleep
+    const validSleepReadings = readings.filter(r => r.sleep_hrs !== null);
+    const avgSleep = validSleepReadings.length > 0 
+      ? validSleepReadings.reduce((sum, r) => sum + r.sleep_hrs, 0) / validSleepReadings.length 
+      : 0;
+    if (avgSleep < 7) {
+      recs.push({
+        icon: '😴',
+        color: '#3b82f6',
+        title: 'Prioritize 7-8 Hours of Sleep',
+        desc: `Your sleep averaged ${avgSleep.toFixed(1)} hours. Insufficient sleep causes a surge in cortisol (stress hormone), which directly triggers an increase in blood glucose.`
+      });
+    }
+
+    // 4. Diet
+    recs.push({
+      icon: '🥗',
+      color: '#06b6d4',
+      title: 'Adjust Diet & Reduce Carbohydrates',
+      desc: 'Limit refined carbohydrates (bread, pasta, white rice) and sugars. Focus on complex carbohydrates (beans, oats), lean proteins, healthy fats, and high-fiber vegetables to smooth out glucose spikes.'
+    });
+
+    // 5. Hydration
+    recs.push({
+      icon: '💧',
+      color: '#3b82f6',
+      title: 'Increase Hydration',
+      desc: 'Drink at least 8-10 glasses of water daily. When blood sugar is high, your body attempts to flush excess glucose out through urine, making hydration vital to prevent dehydration and help lower glucose levels.'
+    });
+
+    return recs;
+  };
+
   return (
     <div className="dashboard-layout">
       {/* Sidebar */}
@@ -100,7 +195,7 @@ export default function PatientDashboard() {
           {[
             { id: 'dashboard', icon: '📊', label: 'Dashboard' },
             { id: 'log',       icon: '✏️', label: 'Log Reading' },
-            { id: 'alerts',    icon: '🔔', label: `Alerts ${alerts.filter(a => !a.resolved).length > 0 ? `(${alerts.filter(a=>!a.resolved).length})` : ''}` },
+            { id: 'alerts',    icon: '🔔', label: `Alerts ${activeAlerts.length > 0 ? `(${activeAlerts.length})` : ''}` },
             { id: 'report',    icon: '📋', label: 'Weekly Report' },
           ].map((item) => (
             <button
@@ -156,9 +251,18 @@ export default function PatientDashboard() {
                     ) : <span className="stat-card-empty">No data</span>}
                   </div>
                   <div className="stat-card">
+                    <span className="stat-card-label">Alert Level</span>
+                    <span className="stat-card-value" style={{ color: alertLevel.color }}>
+                      {alertLevel.label}
+                    </span>
+                    <span className="stat-card-unit" style={{ marginTop: '4px', display: 'block' }}>
+                      {alertLevel.sub}
+                    </span>
+                  </div>
+                  <div className="stat-card">
                     <span className="stat-card-label">Open Alerts</span>
-                    <span className="stat-card-value" style={{ color: alerts.filter(a => !a.resolved).length > 0 ? '#ef4444' : '#10b981' }}>
-                      {alerts.filter(a => !a.resolved).length}
+                    <span className="stat-card-value" style={{ color: activeAlerts.length > 0 ? '#ef4444' : '#10b981' }}>
+                      {activeAlerts.length}
                     </span>
                     <span className="stat-card-unit">active</span>
                   </div>
@@ -175,6 +279,31 @@ export default function PatientDashboard() {
                     <span className="stat-card-unit">{report ? '/100' : 'no report'}</span>
                   </div>
                 </div>
+
+                {/* Clinical Recommendation System (triggered when Alert Level is MEDIUM) */}
+                {alertLevel.label === 'MEDIUM' && (
+                  <div className="card recommendation-card animate-fade-in" style={{ borderLeft: '4px solid #a78bfa', background: 'rgba(167, 139, 250, 0.04)', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+                      <span style={{ fontSize: '28px' }}>📈</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#a78bfa' }}>Clinical Recommendation System</h3>
+                        <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>Dynamic adjustments required to stabilize your blood sugar and reverse the increasing trend.</p>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {generatePersonalizedRecommendations().map((rec, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: 'rgba(255,255,255,0.02)', padding: '14px 18px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                          <span style={{ fontSize: '20px', color: rec.color }}>{rec.icon}</span>
+                          <div>
+                            <strong style={{ display: 'block', fontSize: '14px', color: '#f0f6ff', marginBottom: '4px' }}>{rec.title}</strong>
+                            <span style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.5, display: 'block' }}>{rec.desc}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="chart-section card">
                   <h3 className="card-title">7-Day Glucose Trend</h3>
@@ -210,6 +339,7 @@ export default function PatientDashboard() {
                         <label htmlFor="log-date">Date</label>
                         <input
                           id="log-date" name="date" type="date"
+                          max={today()}
                           value={form.date} onChange={handleFormChange} required
                         />
                       </div>

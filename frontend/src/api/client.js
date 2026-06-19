@@ -24,6 +24,10 @@ export const registerDoctor = (name, email, password) =>
 export const registerPatient = (name, email, password, doctor_id) =>
   api.post('/auth/register/patient', { name, email, password, doctor_id });
 
+export const getDoctorsList = () =>
+  api.get('/auth/doctors');
+
+
 // Readings
 export const submitReading = (data) => api.post('/readings', data);
 export const getMyReadings = (days = 7) => api.get(`/readings/me?days=${days}`);

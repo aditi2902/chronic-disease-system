@@ -1,12 +1,32 @@
-import { useState } from 'react';
-import { loginUser } from '../api/client';
+import { useState, useEffect } from 'react';
+import { loginUser, registerDoctor, registerPatient, getDoctorsList } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '', role: 'patient' });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'patient', doctor_id: '' });
+  const [doctors, setDoctors] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const fetchDoctors = async () => {
+    try {
+      const { data } = await getDoctorsList();
+      setDoctors(data);
+      if (data.length > 0 && !form.doctor_id) {
+        setForm(prev => ({ ...prev, doctor_id: data[0].id.toString() }));
+      }
+    } catch (err) {
+      console.error('Error fetching doctors:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isRegistering && form.role === 'patient') {
+      fetchDoctors();
+    }
+  }, [isRegistering, form.role]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -16,17 +36,41 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
-      const { data } = await loginUser(form.email, form.password, form.role);
-      login(data);
+      if (isRegistering) {
+        if (form.role === 'doctor') {
+          const { data } = await registerDoctor(form.name, form.email, form.password);
+          login(data);
+        } else {
+          if (!form.doctor_id) {
+            throw new Error('Please select a doctor. If no doctor exists, please sign up as a doctor first.');
+          }
+          const { data } = await registerPatient(form.name, form.email, form.password, parseInt(form.doctor_id, 10));
+          login(data);
+        }
+      } else {
+        const { data } = await loginUser(form.email, form.password, form.role);
+        login(data);
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Check credentials.');
+      if (err.response?.data?.detail) {
+        const details = err.response.data.detail;
+        if (Array.isArray(details)) {
+          setError(details.map(d => d.msg).join(', '));
+        } else {
+          setError(details);
+        }
+      } else {
+        setError(err.message || 'Authentication failed. Check inputs.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const fillDemo = (role) => {
+    setIsRegistering(false);
     if (role === 'doctor') {
       setForm({ email: 'doctor@chronic.dev', password: 'doctor123', role: 'doctor' });
     } else if (role === 'alice') {
@@ -74,6 +118,21 @@ export default function Login() {
             </div>
           </div>
 
+          {isRegistering && (
+            <div className="form-group">
+              <label htmlFor="login-name">Full Name</label>
+              <input
+                id="login-name"
+                name="name"
+                type="text"
+                value={form.name || ''}
+                onChange={handleChange}
+                placeholder="John Doe"
+                required
+              />
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="login-email">Email</label>
             <input
@@ -102,6 +161,41 @@ export default function Login() {
             />
           </div>
 
+          {isRegistering && form.role === 'patient' && (
+            <div className="form-group">
+              <label htmlFor="login-doctor">Primary Doctor</label>
+              {doctors.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '6px' }}>
+                  No doctors registered yet. Please register a doctor first.
+                </div>
+              ) : (
+                <select
+                  id="login-doctor"
+                  name="doctor_id"
+                  value={form.doctor_id}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'white',
+                    outline: 'none',
+                    fontSize: '14px'
+                  }}
+                >
+                  {doctors.map(doc => (
+                    <option key={doc.id} value={doc.id} style={{ background: '#0b1628', color: 'white' }}>
+                      {doc.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
           {error && <div className="form-error">{error}</div>}
 
           <button
@@ -110,27 +204,81 @@ export default function Login() {
             className="btn-primary btn-full"
             disabled={loading}
           >
-            {loading ? <span className="spinner" /> : 'Sign In'}
+            {loading ? <span className="spinner" /> : (isRegistering ? 'Sign Up' : 'Sign In')}
           </button>
         </form>
 
-        <div className="demo-section">
-          <p className="demo-label">Quick Demo Login</p>
-          <div className="demo-buttons">
-            <button className="demo-btn" onClick={() => fillDemo('doctor')} id="demo-doctor">
-              Dr. Mitchell
-            </button>
-            <button className="demo-btn demo-green" onClick={() => fillDemo('alice')} id="demo-alice">
-              Alice (Controlled)
-            </button>
-            <button className="demo-btn demo-yellow" onClick={() => fillDemo('bob')} id="demo-bob">
-              Bob (Trend ↑)
-            </button>
-            <button className="demo-btn demo-red" onClick={() => fillDemo('carol')} id="demo-carol">
-              Carol (Critical)
-            </button>
-          </div>
+        <div className="auth-toggle-link" style={{ textAlign: 'center', marginTop: '20px', fontSize: '14px' }}>
+          {isRegistering ? (
+            <span>
+              Already have an account?{' '}
+              <button
+                type="button"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue)',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit'
+                }}
+                onClick={() => {
+                  setIsRegistering(false);
+                  setForm({ name: '', email: '', password: '', role: 'patient', doctor_id: '' });
+                  setError('');
+                }}
+              >
+                Sign In
+              </button>
+            </span>
+          ) : (
+            <span>
+              Don't have an account?{' '}
+              <button
+                type="button"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue)',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit'
+                }}
+                onClick={() => {
+                  setIsRegistering(true);
+                  setForm({ name: '', email: '', password: '', role: 'patient', doctor_id: '' });
+                  setError('');
+                }}
+              >
+                Sign Up
+              </button>
+            </span>
+          )}
         </div>
+
+        {!isRegistering && (
+          <div className="demo-section">
+            <p className="demo-label">Quick Demo Login</p>
+            <div className="demo-buttons">
+              <button className="demo-btn" onClick={() => fillDemo('doctor')} id="demo-doctor">
+                Dr. Mitchell
+              </button>
+              <button className="demo-btn demo-green" onClick={() => fillDemo('alice')} id="demo-alice">
+                Alice (Controlled)
+              </button>
+              <button className="demo-btn demo-yellow" onClick={() => fillDemo('bob')} id="demo-bob">
+                Bob (Trend ↑)
+              </button>
+              <button className="demo-btn demo-red" onClick={() => fillDemo('carol')} id="demo-carol">
+                Carol (Critical)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { safeFormatDate } from '../utils/date';
 import RiskBadge from './RiskBadge';
 
 function getRiskLevel(score) {
@@ -33,7 +33,7 @@ export default function ReportCard({ report, isDoctor = false }) {
         <div>
           <h3 className="report-title">Weekly Health Report</h3>
           <p className="report-week">
-            Week of {format(new Date(report.week_start), 'MMMM d, yyyy')}
+            Week of {safeFormatDate(report.week_start, 'MMMM d, yyyy')}
           </p>
         </div>
         <div className="report-risk-block">

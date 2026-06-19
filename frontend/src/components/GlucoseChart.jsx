@@ -2,7 +2,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ReferenceLine, ResponsiveContainer
 } from 'recharts';
-import { format } from 'date-fns';
+import { safeFormatDate } from '../utils/date';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -34,7 +34,7 @@ export default function GlucoseChart({ readings, height = 300 }) {
   }
 
   const data = readings.map((r) => ({
-    date: format(new Date(r.date), 'MMM d'),
+    date: safeFormatDate(r.date, 'MMM d'),
     glucose: r.glucose_mg_dl,
     weight: r.weight_kg,
     medication: r.medication_taken,

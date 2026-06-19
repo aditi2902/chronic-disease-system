@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { safeFormatDate } from '../utils/date';
 
 const SEVERITY_STYLE = {
   CRITICAL:    { icon: '🚨', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
@@ -41,7 +41,7 @@ export default function AlertLog({ alerts, onResolve, showResolve = false }) {
             <p className="alert-message">{alert.message}</p>
             <div className="alert-footer">
               <span className="alert-time">
-                {format(new Date(alert.triggered_at), 'MMM d, yyyy · h:mm a')}
+                {safeFormatDate(alert.triggered_at, 'MMM d, yyyy · h:mm a')}
               </span>
               {showResolve && !alert.resolved && onResolve && (
                 <button
