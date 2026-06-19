@@ -12,6 +12,12 @@ from auth import hash_password, verify_password, create_access_token
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+@router.get("/doctors", response_model=list[schemas.DoctorLookup])
+def list_doctors_lookup(db: Session = Depends(get_db)):
+    return db.query(models.Doctor).all()
+
+
+
 @router.post("/register/doctor", response_model=schemas.TokenResponse, status_code=201)
 def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_db)):
     if db.query(models.Doctor).filter(models.Doctor.email == payload.email).first():

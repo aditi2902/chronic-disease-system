@@ -58,6 +58,7 @@ def list_patients(
             .filter(
                 models.Alert.patient_id == patient.id,
                 models.Alert.resolved == False,
+                models.Alert.severity.in_([models.AlertSeverity.CRITICAL, models.AlertSeverity.HIGH]),
             )
             .count()
         )
@@ -131,7 +132,10 @@ def get_patient_alerts(
 
     return (
         db.query(models.Alert)
-        .filter(models.Alert.patient_id == patient_id)
+        .filter(
+            models.Alert.patient_id == patient_id,
+            models.Alert.severity.in_([models.AlertSeverity.CRITICAL, models.AlertSeverity.HIGH]),
+        )
         .order_by(models.Alert.triggered_at.desc())
         .all()
     )

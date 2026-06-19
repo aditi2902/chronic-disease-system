@@ -1,7 +1,7 @@
 """
 schemas.py — Pydantic request/response models.
 """
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -35,10 +35,18 @@ class TokenResponse(BaseModel):
     name: str
 
 
+class DoctorLookup(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 # ── Readings ──────────────────────────────────────────────────────────────────
 
+
 class ReadingCreate(BaseModel):
-    date: Optional[date] = None
+    date: Optional[dt_date] = None
     glucose_mg_dl: float
     weight_kg: Optional[float] = None
     sleep_hrs: Optional[float] = None
@@ -56,7 +64,7 @@ class ReadingCreate(BaseModel):
 class ReadingOut(BaseModel):
     id: int
     patient_id: int
-    date: date
+    date: dt_date
     glucose_mg_dl: float
     weight_kg: Optional[float]
     sleep_hrs: Optional[float]
@@ -89,7 +97,7 @@ class PatientSummary(BaseModel):
     email: str
     doctor_id: Optional[int]
     latest_glucose: Optional[float]
-    latest_date: Optional[date]
+    latest_date: Optional[dt_date]
     risk_badge: str          # "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "NO DATA"
     open_alerts: int
 
@@ -112,7 +120,7 @@ class PatientDetail(BaseModel):
 class WeeklyReportOut(BaseModel):
     id: int
     patient_id: int
-    week_start: date
+    week_start: dt_date
     json_stats: str
     llm_summary: Optional[str]
     doctor_summary: Optional[str]

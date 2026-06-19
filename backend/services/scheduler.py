@@ -16,7 +16,7 @@ from database import SessionLocal
 import models
 from services.rule_engine import compute_risk_score
 from services.ai_service import generate_patient_summary, generate_doctor_summary
-from services.email_service import send_weekly_report_email
+from services.email_service import send_weekly_report_email, send_daily_log_email, GMAIL_USER
 
 
 def _compute_weekly_stats(readings: list) -> dict:
@@ -193,6 +193,18 @@ def generate_report_for_patient(patient_id: int):
         db.close()
 
 
+def send_daily_log_job():
+    print("[scheduler] Running daily log job...")
+    db = SessionLocal()
+    try:
+        if GMAIL_USER:
+            send_daily_log_email(db, GMAIL_USER)
+    except Exception as e:
+        print(f"[scheduler] Error in daily log job: {e}")
+    finally:
+        db.close()
+
+
 def start_scheduler():
     """Initialize and start the APScheduler background scheduler."""
     scheduler = BackgroundScheduler()
@@ -204,6 +216,14 @@ def start_scheduler():
         minute=59,
         id="weekly_reports",
     )
+    scheduler.add_job(
+        send_daily_log_job,
+        trigger="cron",
+        hour=11,
+        minute=0,
+        id="daily_logs",
+    )
     scheduler.start()
-    print("[scheduler] APScheduler started — weekly reports every Sunday 23:59")
+    print("[scheduler] APScheduler started — weekly reports every Sunday 23:59, daily logs every day at 11:00 AM")
     return scheduler
+

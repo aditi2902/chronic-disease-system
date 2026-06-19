@@ -12,7 +12,7 @@ from database import get_db
 import models, schemas
 from dependencies import require_patient
 from services.rule_engine import run_rule_engine
-from services.email_service import send_alert_email
+from services.email_service import send_alert_email, GMAIL_USER
 
 router = APIRouter(prefix="/readings", tags=["readings"])
 
@@ -62,15 +62,12 @@ def submit_reading(
         all_glucose_values=glucose_history,
     )
 
-    # Send email if alert is CRITICAL or TREND
-    if alert and alert.severity in (
-        models.AlertSeverity.CRITICAL,
-        models.AlertSeverity.TREND_ALERT,
-    ):
-        doctor = current_patient.doctor
-        if doctor:
+    # Send email only if a CRITICAL alert is triggered
+    if alert and alert.severity == models.AlertSeverity.CRITICAL:
+        recipient = GMAIL_USER if GMAIL_USER else (current_patient.doctor.email if current_patient.doctor else None)
+        if recipient:
             send_alert_email(
-                to_email=doctor.email,
+                to_email=recipient,
                 patient_name=current_patient.name,
                 severity=alert.severity.value,
                 message=alert.message,
